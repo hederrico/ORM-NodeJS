@@ -1,9 +1,18 @@
 const database = require("../models");
-
+const Sequelize = require('sequelize');
 class PessoaController {
+    static async pegaPessoasAtivas(req, res) {
+        try {
+            const pessoasAtivas = await database.Pessoas.findAll();
+            return res.status(200).json(pessoasAtivas);
+        } catch (error) {
+            return res.status(500).json(error.message);
+        }
+    }
+
     static async pegaTodasAsPessoas(req, res) {
         try {
-            const todasAsPessoas = await database.Pessoas.findAll();
+            const todasAsPessoas = await database.Pessoas.scope('todos').findAll();
             return res.status(200).json(todasAsPessoas);
         } catch (error) {
             return res.status(500).json(error.message);
@@ -130,17 +139,66 @@ class PessoaController {
     static async restauraMatricula(req, res) {
         const { estudanteId, matriculaId } = req.params
         try {
-          await database.Matriculas.restore({
+            await database.Matriculas.restore({
             where: {
-              id: Number(matriculaId),
-              estudante_id: Number(estudanteId)
+                id: Number(matriculaId),
+                estudante_id: Number(estudanteId)
             }
-          })
-          return res.status(200).send({ mensagem: `Matricula com id ${id} restaurada!`})
+            })
+            return res.status(200).send({ mensagem: `Matricula com id ${id} restaurada!`})
         } catch (error) {
-          return res.status(500).json(error.message)
+            return res.status(500).json(error.message)
         }
-      }
+    }
+
+    static async pegaMatriculas(req, res) {
+        const {estudanteId} = req.params;
+        try {
+           const pessoa = await database.Pessoas.findOne({
+               where: {id: Number(estudanteId)}
+           })
+           const matriculas = await pessoa.getAulasMatriculadas();
+           
+            res.status(200).json(matriculas);
+        } catch (error) {
+            res.status(500).json(error.message);
+        }
+    }
+
+    static async pegaMatriculasPorTurma(req, res) {
+        const {turmaId} = req.params;
+        try {
+            const todasAsMatriculas = await database.Matriculas
+            .findAndCountAll({
+                where: {
+                    turma_id: Number(turmaId),
+                    status: 'confirmado'
+                },
+                limit: 20,
+                order: [['estudante_id', 'ASC']]
+            });
+            res.status(200).json(todasAsMatriculas);
+        } catch (error) {
+            res.status(500).json(error.message);
+        }
+    }
+
+    static async pegaTurmasLotadas(req, res) {
+        const lotacaoTurma = 2;
+        try {
+            const turmasLotadas = await database.Matriculas.findAndCountAll({
+                where: {
+                    status: 'confirmado'
+                },
+                attributes: ['turma_id'],
+                group: ['turma_id'],
+                having: Sequelize.literal(`Count(turma_id) >= ${lotacaoTurma}`)
+            });
+            res.status(200).json(turmasLotadas);
+        } catch (error) {
+            res.status(500).json(error.message);
+        }
+    }
 }
 
 module.exports = PessoaController;
